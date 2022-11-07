@@ -1,6 +1,7 @@
 import json
 import telebot
 import re
+import requests
 
 from telebot import types
 
@@ -32,7 +33,7 @@ def get_text_messages(message):
         # body = requests.get(ip,endpoint api).json() //отправляем запрос по фамилии, по ФИ, по Фамилии И.О.?
         with open("responsible_true.json", "r") as read_file:  # заменить на requests?
             data = json.loads(read_file.read())
-            if data['result'] is None:
+            if data['result'] is None or data['result']['full_name'] != message.text:
                 reply = types.InlineKeyboardMarkup()
                 trymore = types.InlineKeyboardButton(text='Попробую ещё раз', callback_data='trymore')
                 nottry = types.InlineKeyboardButton(text='Я уверен в правильности введенных данных',
@@ -42,7 +43,8 @@ def get_text_messages(message):
                                  "Вашего имени нет в базе данных, может, вы что-то не так ввели",
                                  reply_markup=reply)
             else:
-                bot.send_message(message.chat.id, "Здравствуйте, " + data['result']['full_name'],
+                bot.send_message(message.chat.id, "Здравствуйте, " + data['result']['full_name'] +
+                                 '. У вас снизу кнопка, открывающая окно с сотрудниками и их статусом занятий',
                                  reply_markup=webAppKeyboard())
 
     else:
@@ -63,7 +65,7 @@ def webAppKeyboard():  # создание клавиатуры с webapp кно�
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
     webAppTest = types.WebAppInfo(
         "https://famous-tarsier-114ae1.netlify.app/")  # создаем webappinfo - формат хранения url
-    one_butt = types.KeyboardButton(text="Тестовая страница", web_app=webAppTest)  # создаем кнопку типа webapp
+    one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)  # создаем кнопку типа webapp
     keyboard.add(one_butt)  # добавляем кнопки в клавиатуру
 
     return keyboard  # возвращаем клавиатуру
