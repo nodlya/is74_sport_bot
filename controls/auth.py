@@ -1,9 +1,11 @@
 import json
+import shutil
 import threading
 import telebot
 import re
 import requests
 from telebot import types
+import urllib3
 
 # Объект бота
 bot = telebot.TeleBot(token="5688425165:AAHkyGJxmoMejLxzkj7ArReY5GxPZBFvjmk")
@@ -14,8 +16,6 @@ server_url = 'https://c0b2-2a09-5302-ffff-00-1ce6.eu.ngrok.io/'
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    global all_chat_id
-    all_chat_id.append(message.chat.id)
     mesg = bot.send_message(message.chat.id,
                             "Напишите мне свои фамилию имя и отчество, чтобы мы загрузили информацию по спортзалу и вашим сотрудникам сами")
     bot.register_next_step_handler(mesg, get_text_messages)
@@ -43,16 +43,16 @@ def no_text(message):
 #         file = report.read()
 #     bot2.send_document(message.chat.id, file, visible_file_name='отчёт.xlsx')
 
-#TODO
+
 def get_report(message):
-    report = requests.get(url='')
+    report = requests.get(server_url + 'get_report').content
     bot2.send_document(message.chat.id, report, visible_file_name='отчёт.xlsx')
 
 
 def remind(message):
     global all_chat_id
     for id in all_chat_id:
-        bot.send_message(id, 'Напоминаем, что необходимо проверить списки сотрудников, посещающих спортзал')
+        bot.send_message(id[0], 'Напоминаем, что необходимо проверить списки сотрудников, посещающих спортзал')
 
 
 @bot.message_handler(commands=['help'])
@@ -104,7 +104,9 @@ def get_text_messages(message):
         else:
             bot.send_message(message.chat.id, "Здравствуйте, " + data['result']['full_name'] +
                                  '. У вас снизу кнопка, открывающая окно с сотрудниками и их статусом занятий',
-                                 reply_markup=web_app_keyboard())
+                                 reply_markup=web_app_keyboard(data))
+            global all_chat_id
+            all_chat_id.append([message.chat.id, data])
     else:
         mesg = bot.send_message(message.chat.id, "Введите ещё раз в формате \"Фамилия Имя Отчество\"")
         bot.register_next_step_handler(mesg, get_text_messages)
@@ -119,10 +121,10 @@ def callback_inline(call):
         bot.send_message(call.message.chat.id, 'Напишите разработчикам, чтобы вас добавили в базу данных')
 
 #TODO
-def web_app_keyboard():  # создание клавиатуры с webapp кнопкой
+def web_app_keyboard(file):  # создание клавиатуры с webapp кнопкой
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
     webAppTest = types.WebAppInfo(
-        "https://famous-tarsier-114ae1.netlify.app/")  # создаем webappinfo - формат хранения url
+        "https://famous-tarsier-114ae1.netlify.app/?id=" + get_user_departament(file))  # создаем webappinfo - формат хранения url
     one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)  # создаем кнопку типа webapp
     keyboard.add(one_butt)  # добавляем кнопки в клавиатуру
 
@@ -139,7 +141,7 @@ def admin_menu(message):
 
 
 def get_user_departament(user_json):
-    return user_json['result']['department_name']
+    return str(user_json['result']['responsible_for_the_department_id'])
 
 
 def get_proper_user_json(username):
@@ -149,15 +151,15 @@ def get_proper_user_json(username):
     json_list.append(get_user_json(split[0]+' ' + split[1][0] + ' ' + split[2][0]))
     json_list.append(get_user_json(split[0]+' ' + split[1][0] + '. ' + split[2][0] + '.'))
     for t in json_list:
-        if t is not None:
+        if t['result'] is not None:
+            print(t)
             return t
     return None
 
-#TODO
+
 def get_user_json(username):
     data = requests.get(server_url + 'verification/?name_responsible=' + username).json() #ищем как написал пользователь
-    file = ''
-    if data['result']== 'null':
+    if data['result'] == 'null':
         return None
     else:
         return data
