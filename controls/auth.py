@@ -10,6 +10,7 @@ bot = telebot.TeleBot(token="5688425165:AAHkyGJxmoMejLxzkj7ArReY5GxPZBFvjmk")
 bot2 = telebot.TeleBot(token="5669270484:AAFfvWZN14zRdKKiMohMfzVZmfWGPFyqu4o")
 name = None
 all_chat_id = []
+server_url = 'https://c0b2-2a09-5302-ffff-00-1ce6.eu.ngrok.io/'
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
@@ -154,13 +155,12 @@ def get_proper_user_json(username):
 
 #TODO
 def get_user_json(username):
-    data = requests.get(url='').json() #ищем как написал пользователь
+    data = requests.get(server_url + 'verification/?name_responsible=' + username).json() #ищем как написал пользователь
     file = ''
-    try:
-        file = json.loads(data)
-    except:
+    if data['result']== 'null':
         return None
-    return file
+    else:
+        return data
 
 
 threading.Thread(target=bot2.polling).start()
