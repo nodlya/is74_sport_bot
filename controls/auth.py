@@ -5,19 +5,21 @@ import telebot
 import re
 import requests
 from telebot import types
-import urllib3
+
 
 # Объект бота
 bot = telebot.TeleBot(token="5688425165:AAHkyGJxmoMejLxzkj7ArReY5GxPZBFvjmk")
 bot2 = telebot.TeleBot(token="5669270484:AAFfvWZN14zRdKKiMohMfzVZmfWGPFyqu4o")
 name = None
 all_chat_id = []
-server_url = 'https://c0b2-2a09-5302-ffff-00-1ce6.eu.ngrok.io/'
+server_url = 'https://5582-2a09-5302-ffff-00-1ce6.eu.ngrok.io/'
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
     mesg = bot.send_message(message.chat.id,
-                            "Напишите мне свои фамилию имя и отчество, чтобы мы загрузили информацию по спортзалу и вашим сотрудникам сами")
+                            "Напишите мне свои фамилию имя и отчество, чтобы мы загрузили информацию по спортзалу и вашим сотрудникам сами"
+                            #, reply_markup=web_app_keyboard())
+                            )
     bot.register_next_step_handler(mesg, get_text_messages)
 
 
@@ -30,12 +32,35 @@ def start_message(message):
 
 @bot2.message_handler()
 def no_text(message):
-    if message.text == 'Получить отчёт':
-        get_report(message)
+    if message.text == 'Получить отчёт активных':
+        get_report_active(message)
+    elif message.text == 'Получить отчёт неактивных':
+        get_report_not_active(message)
     elif message.text == 'Напомнить про спортзал':
         remind(message)
     else:
         bot2.send_message(message.chat.id, 'dunno')
+
+@bot.message_handler()
+def no_text(message):
+    if message.text == 'Отчёт активных':
+        dep = 0
+        for i in range(0,len(all_chat_id)):
+            print(i)
+            if (all_chat_id[i][0] == message.chat.id):
+                dep = get_user_departament(all_chat_id[i][1])
+        print(dep)
+        get_report_active_dep(message, dep)
+    elif message.text == 'Отчёт неактивных':
+        dep = 0
+        for i in range(0, len(all_chat_id)):
+            print(i)
+            if (all_chat_id[i][0] == message.chat.id):
+                dep = get_user_departament(all_chat_id[i][1])
+        print(dep)
+        get_report_not_active_dep(message, dep)
+    else:
+        bot2.send_message(message.chat.id, 'я такого не знаю, попробуйте понажимать на кнопочки')
 
 
 # def get_report(message):
@@ -44,11 +69,21 @@ def no_text(message):
 #     bot2.send_document(message.chat.id, file, visible_file_name='отчёт.xlsx')
 
 
-def get_report(message):
-    report = requests.get(server_url + 'get_report').content
-    bot2.send_document(message.chat.id, report, visible_file_name='отчёт.xlsx')
+def get_report_active(message):
+    report = requests.get(server_url + 'get_report_activ_aboniment').content
+    bot2.send_document(message.chat.id, report, visible_file_name='отчёт_активные.xlsx')
 
+def get_report_not_active(message):
+    report = requests.get(server_url + 'get_report_noactiv_aboniment').content
+    bot2.send_document(message.chat.id, report, visible_file_name='отчёт_неактивные.xlsx')
 
+def get_report_active_dep(message,dep):
+    report = requests.get(server_url + 'get_report_activ_aboniment_in_departament/?id_departament=' + str(dep)).content
+    bot.send_document(message.chat.id, report, visible_file_name='отчёт_активные.xlsx')
+
+def get_report_not_active_dep(message,dep):
+    report = requests.get(server_url + 'get_report_noactiv_aboniment_in_departament/?id_departament=' + dep).content
+    bot.send_document(message.chat.id, report, visible_file_name='отчёт_неактивные.xlsx')
 def remind(message):
     global all_chat_id
     for id in all_chat_id:
@@ -66,29 +101,6 @@ def help_message(message):
     #удаление из бд чат id
 
 
-# def get_text_messages2(message):
-#     if bool(re.match('^[А-Я][а-я]+\s+[А-Я][а-я]+\s+[А-Я][а-я]+', message.text)):
-#         # body = requests.get(ip,endpoint api).json() //отправляем запрос по фамилии, по ФИ, по Фамилии И.О.?
-#         with open("responsible_true.json", "r") as read_file:  # заменить на requests?
-#             data = json.loads(read_file.read())
-#             if data['result'] is None or data['result']['full_name'] != message.text:
-#                 reply = types.InlineKeyboardMarkup()
-#                 trymore = types.InlineKeyboardButton(text='Попробую ещё раз', callback_data='trymore')
-#                 nottry = types.InlineKeyboardButton(text='Я уверен в правильности введенных данных',
-#                                                     callback_data='nottry')
-#                 reply.add(trymore, nottry)
-#                 bot.send_message(message.chat.id,
-#                                  "Вашего имени нет в базе данных, может, вы что-то не так ввели",
-#                                  reply_markup=reply)
-#             else:
-#                 bot.send_message(message.chat.id, "Здравствуйте, " + data['result']['full_name'] +
-#                                  '. У вас снизу кнопка, открывающая окно с сотрудниками и их статусом занятий',
-#                                  reply_markup=web_app_keyboard())
-#
-#     else:
-#         mesg = bot.send_message(message.chat.id, "Введите ещё раз в формате \"Фамилия Имя Отчество\"")
-#         bot.register_next_step_handler(mesg, get_text_messages)
-
 def get_text_messages(message):
     if bool(re.match('^[А-Я][а-я]+\s+[А-Я][а-я]+\s+[А-Я][а-я]+', message.text)):
         data = get_proper_user_json(message.text)
@@ -105,6 +117,7 @@ def get_text_messages(message):
             bot.send_message(message.chat.id, "Здравствуйте, " + data['result']['full_name'] +
                                  '. У вас снизу кнопка, открывающая окно с сотрудниками и их статусом занятий',
                                  reply_markup=web_app_keyboard(data))
+
             global all_chat_id
             all_chat_id.append([message.chat.id, data])
     else:
@@ -125,18 +138,37 @@ def web_app_keyboard(file):  # создание клавиатуры с webapp �
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
     webAppTest = types.WebAppInfo(
         "https://famous-tarsier-114ae1.netlify.app/?id=" + get_user_departament(file))  # создаем webappinfo - формат хранения url
-    one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)  # создаем кнопку типа webapp
+    one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)
+    butt2 = types.KeyboardButton(text="Отчёт активных")
+    butt3 = types.KeyboardButton(text="Отчёт неактивных")# создаем кнопку типа webapp
     keyboard.add(one_butt)  # добавляем кнопки в клавиатуру
+    keyboard.add(butt2)
+    keyboard.add(butt3)
 
     return keyboard  # возвращаем клавиатуру
+
+# def web_app_keyboard():  # создание клавиатуры с webapp кнопкой
+#     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
+#     webAppTest = types.WebAppInfo(
+#         "https://famous-tarsier-114ae1.netlify.app/?id=")  # создаем webappinfo - формат хранения url
+#     one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)
+#     butt2 = types.KeyboardButton(text="Отчёт активных")
+#     butt3 = types.KeyboardButton(text="Отчёт неактивных")# создаем кнопку типа webapp
+#     keyboard.add(one_butt)  # добавляем кнопки в клавиатуру
+#     keyboard.add(butt2)
+#     keyboard.add(butt3)
+#
+#     return keyboard  # возвращаем клавиатуру
 
 
 def admin_menu(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    item1 = types.InlineKeyboardButton('Получить отчёт')
-    item2 = types.InlineKeyboardButton('Напомнить про спортзал')
+    item1 = types.InlineKeyboardButton('Получить отчёт активных')
+    item2 = types.InlineKeyboardButton('Получить отчёт неактивных')
+    item3 = types.InlineKeyboardButton('Напомнить про спортзал')
     markup.add(item1)
     markup.add(item2)
+    markup.add(item3)
     bot2.send_message(message.chat.id, 'Теперь у вас есть панель с опциями', reply_markup=markup)
 
 
