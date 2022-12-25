@@ -8,7 +8,6 @@ import re
 import requests
 from telebot import types
 
-
 # Объект бота
 bot = telebot.TeleBot(token="5688425165:AAHkyGJxmoMejLxzkj7ArReY5GxPZBFvjmk")
 bot2 = telebot.TeleBot(token="5669270484:AAFfvWZN14zRdKKiMohMfzVZmfWGPFyqu4o")
@@ -16,11 +15,12 @@ name = None
 all_chat_id = []
 server_url = 'https://5582-2a09-5302-ffff-00-1ce6.eu.ngrok.io/'
 
+
 @bot.message_handler(commands=['start'])
 def start_message(message):
     mesg = bot.send_message(message.chat.id,
                             "Напишите мне свои фамилию, чтобы мы загрузили информацию по спортзалу и вашим сотрудникам сами"
-                            #, reply_markup=web_app_keyboard())
+                            # , reply_markup=web_app_keyboard())
                             )
     bot.register_next_step_handler(mesg, get_text_messages)
 
@@ -42,7 +42,8 @@ def no_text(message):
         mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного и через пробел название его отдела")
         bot2.register_next_step_handler(mesg, add_responsible)
     elif message.text == 'Изменить ответственного':
-        t=0
+        mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного, чтобы изменить")
+        bot2.register_next_step_handler(mesg, read_update_responsible)
     elif message.text == 'Удалить ответственного':
         mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного, чтобы удалить")
         bot2.register_next_step_handler(mesg, delete_responsible)
@@ -51,12 +52,14 @@ def no_text(message):
     else:
         print('none')
 
+
 def add_responsible(message):
     try:
         surname = message.text[0:message.text.index(' ')]
-        dep = message.text[message.text.index(' ')+1:]
+        dep = message.text[message.text.index(' ') + 1:]
     except:
-        bot2.send_message(message.chat.id, 'Проверьте, всё ли вы ввели, и ещё раз нажмите "Добавить ответственного", а затем напишите фамилию и отдел ответственного')
+        bot2.send_message(message.chat.id,
+                          'Проверьте, всё ли вы ввели, и ещё раз нажмите "Добавить ответственного", а затем напишите фамилию и отдел ответственного')
 
     dep_id = -1
     list = requests.get(server_url + 'get_all_departament').json()
@@ -68,13 +71,58 @@ def add_responsible(message):
     if dep_id == -1:
         bot2.send_message(message.chat.id, all_dep_list())
     else:
-        result = requests.post(server_url + 'create_responsible?last_name_responsible=' + surname + '&id_departaments=' + str(i['id'])).json()
+        result = requests.post(
+            server_url + 'create_responsible?last_name_responsible=' + surname + '&id_departaments=' + str(
+                i['id'])).json()
         print(result)
         try:
             if result['result'] != 'none':
                 bot2.send_message(message.chat.id, 'Ответственный добавлен!')
         except:
             bot2.send_message(message.chat.id, 'Что-то пошло не так... Попробуйте ещё раз')
+
+
+def read_update_responsible(message):
+    surname = message.text
+    list = requests.get(server_url + 'verification?name_responsible=' + surname).json()
+    try:
+        print(list)
+        t = list['result']
+        mesg = bot2.send_message(message.chat.id, 'А теперь введите новые актуальные данные - фамилию и название отдела')
+        bot2.register_next_step_handler(mesg, update_responsible, t)
+    except:
+        bot2.send_message(message.chat.id,
+                          'Проверьте, есть ли такой ответственный и нажмите изменение ответственного ещё раз')
+
+
+def update_responsible(message, user_json):
+    try:
+        surname = message.text[0:message.text.index(' ')]
+        dep = message.text[message.text.index(' ') + 1:].split(', ')
+        dep_id = ''
+        for i in dep:
+            print(i)
+            t = requests.get(server_url + 'get_departament_id/?departamet_name=' + i)
+            print(t)
+            if t.status_code != 400 && t.status_code != 404:
+                dep_id += t['result'] + ','
+            else:
+                bot2.send_message(message.chat.id, all_dep_list())
+        else:
+            print(dep_id)
+            result = requests.patch(
+            server_url + 'change_responsible?id_responsible=' + str(user_json['id'])
+            + '&last_name=' + surname + '&id_departaments=' + dep_id[:-1]).json()
+            print(result)
+            try:
+                if result['result'] != 'none':
+                    bot2.send_message(message.chat.id, 'Ответственный изменен!')
+            except:
+                bot2.send_message(message.chat.id, 'Что-то пошло не так... Попробуйте ещё раз')
+    except:
+        print(traceback.format_exc())
+        bot2.send_message(message.chat.id,
+                      'Проверьте, всё ли вы ввели, и ещё раз нажмите "Изменить ответственного", а затем напишите фамилию и отдел ответственного')
 
 
 def delete_responsible(message):
@@ -93,6 +141,7 @@ def delete_responsible(message):
         print(traceback.format_exc())
         bot2.send_message(message.chat.id, 'Проверьте, есть ли такой ответственный и выберите удаление ещё раз')
 
+
 def all_dep_list():
     result = 'Пожалуйста, сверьтесь со списком, нажмите ещё раз "Добавить ответственного", и введите отдел в точности как в списке:\n'
     list = requests.get(server_url + 'get_all_departament').json()
@@ -105,7 +154,7 @@ def all_dep_list():
 def no_text(message):
     if message.text == 'Отчёт активных':
         dep = 0
-        for i in range(0,len(all_chat_id)):
+        for i in range(0, len(all_chat_id)):
             print(i)
             if all_chat_id[i][0] == message.chat.id:
                 dep = get_user_departament(all_chat_id[i][1]).replace(' ', '')[1:-1]
@@ -133,14 +182,15 @@ def get_report_not_active(message):
     bot2.send_document(message.chat.id, report, visible_file_name='отчёт_неактивные.xlsx')
 
 
-def get_report_active_dep(message,dep):
+def get_report_active_dep(message, dep):
     report = requests.get(server_url + 'get_report_activ_aboniment_in_departament/?id_departaments=' + str(dep)).content
     bot.send_document(message.chat.id, report, visible_file_name='отчёт_активные.xlsx')
 
 
-def get_report_not_active_dep(message,dep):
+def get_report_not_active_dep(message, dep):
     report = requests.get(server_url + 'get_report_noactiv_aboniment_in_departament/?id_departaments=' + dep).content
     bot.send_document(message.chat.id, report, visible_file_name='отчёт_неактивные.xlsx')
+
 
 def remind(message):
     global all_chat_id
@@ -156,7 +206,7 @@ def help_message(message):
 @bot.message_handler(commands=['out'])
 def help_message(message):
     bot.send_message(message.chat.id, 'До свидания!')
-    #удаление из бд чат id
+    # удаление из бд чат id
 
 
 def get_text_messages(message):
@@ -166,14 +216,15 @@ def get_text_messages(message):
             reply = types.InlineKeyboardMarkup()
             trymore = types.InlineKeyboardButton(text='Попробую ещё раз', callback_data='trymore')
             nottry = types.InlineKeyboardButton(text='Я уверен в правильности введенных данных',
-                                                    callback_data='nottry')
+                                                callback_data='nottry')
             reply.add(trymore, nottry)
             bot.send_message(message.chat.id,
-                                 "Вашего имени нет в базе данных, может, вы что-то не так ввели",
-                                 reply_markup=reply)
+                             "Вашего имени нет в базе данных, может, вы что-то не так ввели",
+                             reply_markup=reply)
         else:
-            bot.send_message(message.chat.id, "Здравствуйте! У вас появилась снизу кнопка, открывающая окно с сотрудниками и их статусом занятий",
-                                 reply_markup=web_app_keyboard(data))
+            bot.send_message(message.chat.id,
+                             "Здравствуйте! У вас появилась снизу кнопка, открывающая окно с сотрудниками и их статусом занятий",
+                             reply_markup=web_app_keyboard(data))
 
             global all_chat_id
             all_chat_id.append([message.chat.id, data])
@@ -194,10 +245,11 @@ def callback_inline(call):
 def web_app_keyboard(file):  # создание клавиатуры с webapp кнопкой
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
     webAppTest = types.WebAppInfo(
-        "https://famous-tarsier-114ae1.netlify.app/?id=" + get_user_departament(file).replace(' ', '')[1:-1])  # создаем webappinfo - формат хранения url
+        "https://famous-tarsier-114ae1.netlify.app/?id=" + get_user_departament(file).replace(' ', '')[
+                                                           1:-1])  # создаем webappinfo - формат хранения url
     one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)
     butt2 = types.KeyboardButton(text="Отчёт активных")
-    butt3 = types.KeyboardButton(text="Отчёт неактивных")# создаем кнопку типа webapp
+    butt3 = types.KeyboardButton(text="Отчёт неактивных")  # создаем кнопку типа webapp
     keyboard.add(one_butt)  # добавляем кнопки в клавиатуру
     keyboard.add(butt2)
     keyboard.add(butt3)
@@ -228,8 +280,8 @@ def get_user_departament(user_json):
 
 def get_proper_user_json(username):
     json_list = [get_user_json(username)]
-    #split = username.split(' ')
-    #json_list.append(get_user_json(split[0]))
+    # split = username.split(' ')
+    # json_list.append(get_user_json(split[0]))
     # json_list.append(get_user_json(split[0]+' ' + split[1][0] + ' ' + split[2][0]))
     # json_list.append(get_user_json(split[0]+' ' + split[1][0] + '. ' + split[2][0] + '.'))
     for t in json_list:
@@ -240,7 +292,8 @@ def get_proper_user_json(username):
 
 
 def get_user_json(username):
-    data = requests.get(server_url + 'verification/?name_responsible=' + username).json() #ищем как написал пользователь
+    data = requests.get(
+        server_url + 'verification/?name_responsible=' + username).json()  # ищем как написал пользователь
     if data['result'] == 'null':
         return None
     else:
