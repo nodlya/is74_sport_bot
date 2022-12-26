@@ -22,6 +22,9 @@ def start_message(message):
                             "Напишите мне свои фамилию, чтобы мы загрузили информацию по спортзалу и вашим сотрудникам сами"
                             # , reply_markup=web_app_keyboard())
                             )
+    for t in all_chat_id:
+        if t[0] == message.chat.id:
+            all_chat_id.remove(t)
     bot.register_next_step_handler(mesg, get_text_messages)
 
 
@@ -39,7 +42,7 @@ def no_text(message):
     elif message.text == 'Получить отчёт неактивных':
         get_report_not_active(message)
     elif message.text == 'Добавить ответственного человека':
-        mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного и через пробел название его отдела")
+        mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного и названия его отделов через запятую с пробелами")
         bot2.register_next_step_handler(mesg, add_responsible)
     elif message.text == 'Изменить ответственного':
         mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного, чтобы изменить")
@@ -47,6 +50,9 @@ def no_text(message):
     elif message.text == 'Удалить ответственного':
         mesg = bot2.send_message(message.chat.id, "Введите фамилию ответственного, чтобы удалить")
         bot2.register_next_step_handler(mesg, delete_responsible)
+    elif message.text == 'Добавить отдел':
+        mesg = bot2.send_message(message.chat.id, "Введите название нового отдела или семьи")
+        bot2.register_next_step_handler(mesg, add_department)
     elif message.text == 'Напомнить про спортзал':
         remind(message)
     else:
@@ -56,24 +62,25 @@ def no_text(message):
 def add_responsible(message):
     try:
         surname = message.text[0:message.text.index(' ')]
-        dep = message.text[message.text.index(' ') + 1:]
+        dep = message.text[message.text.index(' ') + 1:].split(', ')
     except:
         bot2.send_message(message.chat.id,
                           'Проверьте, всё ли вы ввели, и ещё раз нажмите "Добавить ответственного", а затем напишите фамилию и отдел ответственного')
 
-    dep_id = -1
-    list = requests.get(server_url + 'get_all_departament').json()
-    resp = ''
-    for i in list['result']:
-        if i['departament_name'] == dep:
-            dep_id = i['id']
-            resp = i
-    if dep_id == -1:
-        bot2.send_message(message.chat.id, all_dep_list())
-    else:
+    dep_id = ''
+    for i in dep:
+        print(i)
+        t = requests.get(server_url + 'get_departament_id/?departamet_name=' + i)
+        print(t)
+        if t.status_code != 400 & t.status_code != 404:
+            dep_id += str(t.json()['result']) + ','
+        else:
+            bot2.send_message(message.chat.id, all_dep_list())
+            break
+
+    if dep_id != '':
         result = requests.post(
-            server_url + 'create_responsible?last_name_responsible=' + surname + '&id_departaments=' + str(
-                i['id'])).json()
+            server_url + 'create_responsible?last_name_responsible=' + surname + '&id_departaments=' + dep_id[:-1]).json()
         print(result)
         try:
             if result['result'] != 'none':
@@ -85,12 +92,12 @@ def add_responsible(message):
 def read_update_responsible(message):
     surname = message.text
     list = requests.get(server_url + 'verification?name_responsible=' + surname).json()
-    try:
-        print(list)
-        t = list['result']
-        mesg = bot2.send_message(message.chat.id, 'А теперь введите новые актуальные данные - фамилию и название отдела')
+    print(list)
+    t = list['result']
+    if t is not None:
+        mesg = bot2.send_message(message.chat.id, 'А теперь введите новые актуальные данные - фамилию и названия отдела через запятую с пробелом')
         bot2.register_next_step_handler(mesg, update_responsible, t)
-    except:
+    else:
         bot2.send_message(message.chat.id,
                           'Проверьте, есть ли такой ответственный и нажмите изменение ответственного ещё раз')
 
@@ -104,8 +111,8 @@ def update_responsible(message, user_json):
             print(i)
             t = requests.get(server_url + 'get_departament_id/?departamet_name=' + i)
             print(t)
-            if t.status_code != 400 && t.status_code != 404:
-                dep_id += t['result'] + ','
+            if t.status_code != 400 & t.status_code != 404:
+                dep_id += str(t.json()['result']) + ','
             else:
                 bot2.send_message(message.chat.id, all_dep_list())
         else:
@@ -117,6 +124,10 @@ def update_responsible(message, user_json):
             try:
                 if result['result'] != 'none':
                     bot2.send_message(message.chat.id, 'Ответственный изменен!')
+                print(all_chat_id)
+                for t in all_chat_id:
+                    if t[1]['result']['last_name'] == surname:
+                        bot.send_message(t[0], 'Вашу информацию обновили, нажмите /start и залогиньтесь заново, пожалуйста')
             except:
                 bot2.send_message(message.chat.id, 'Что-то пошло не так... Попробуйте ещё раз')
     except:
@@ -135,11 +146,34 @@ def delete_responsible(message):
         try:
             if result['result'] != 'null':
                 bot2.send_message(message.chat.id, 'Ответственный удалён!')
+                for t in all_chat_id:
+                    if t[1]['result']['last_name'] == surname:
+                        bot.send_message(t[0],
+                                         'Извините, вы больше не ответственный за спортзал(', reply_markup=web_app_keyboard(''))
+                        for i in all_chat_id:
+                            if i[0] == t[0]:
+                                all_chat_id.remove(t)
+
         except:
+            print(traceback.format_exc())
             bot2.send_message(message.chat.id, 'Что-то пошло не так....')
     except:
         print(traceback.format_exc())
         bot2.send_message(message.chat.id, 'Проверьте, есть ли такой ответственный и выберите удаление ещё раз')
+
+
+def add_department(message):
+    if requests.get(server_url + 'get_departament_id/?departamet_name=' + message.text):
+            bot2.send_message(message.chat.id, 'Такой отдел уже есть')
+            return
+    try:
+        result = requests.get(server_url + 'create_departament/?departament_name=' + message.text).json()
+        print(result)
+        if result['result'] is not None:
+            bot2.send_message(message.chat.id, 'Отдел создан!')
+    except:
+        print(traceback.format_exc())
+        bot2.send_message(message.chat.id, 'Что-то пошло не так, попробуйте ещё раз')
 
 
 def all_dep_list():
@@ -169,7 +203,8 @@ def no_text(message):
         print(dep)
         get_report_not_active_dep(message, dep)
     else:
-        bot2.send_message(message.chat.id, 'я такого не знаю, попробуйте понажимать на кнопочки')
+        bot.send_message(message.chat.id, 'Если вы хотите залогиниться, то нажмите /start, '
+                                          'в противном случае выберите кнопки в меню')
 
 
 def get_report_active(message):
@@ -222,12 +257,19 @@ def get_text_messages(message):
                              "Вашего имени нет в базе данных, может, вы что-то не так ввели",
                              reply_markup=reply)
         else:
+            b = True
+            for t in all_chat_id:
+                if t[0] == message.chat.id:
+                    b = False
+                if t[1]['result']['last_name'] == message.text:
+                    bot.send_message(message.chat.id, 'Такой человек уже залогинен, так что ничего не можем сделать, '
+                                                      'чтобы залогиниться ещё раз нажмите /start')
+                    return
+            if b:
+                all_chat_id.append([message.chat.id, data])
             bot.send_message(message.chat.id,
                              "Здравствуйте! У вас появилась снизу кнопка, открывающая окно с сотрудниками и их статусом занятий",
                              reply_markup=web_app_keyboard(data))
-
-            global all_chat_id
-            all_chat_id.append([message.chat.id, data])
     else:
         mesg = bot.send_message(message.chat.id, "Что-то видимо не так, напишите фамилию ещё раз")
         bot.register_next_step_handler(mesg, get_text_messages)
@@ -243,10 +285,15 @@ def callback_inline(call):
 
 
 def web_app_keyboard(file):  # создание клавиатуры с webapp кнопкой
+    webAppTest = ''
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)  # создаем клавиатуру
-    webAppTest = types.WebAppInfo(
+    if file != '':
+        webAppTest = types.WebAppInfo(
         "https://famous-tarsier-114ae1.netlify.app/?id=" + get_user_departament(file).replace(' ', '')[
                                                            1:-1])  # создаем webappinfo - формат хранения url
+    else:
+        webAppTest = types.WebAppInfo(
+            "https://famous-tarsier-114ae1.netlify.app/?id=")
     one_butt = types.KeyboardButton(text="Список сотрудников", web_app=webAppTest)
     butt2 = types.KeyboardButton(text="Отчёт активных")
     butt3 = types.KeyboardButton(text="Отчёт неактивных")  # создаем кнопку типа webapp
@@ -264,13 +311,15 @@ def admin_menu(message):
     item3 = types.InlineKeyboardButton('Добавить ответственного человека')
     item4 = types.InlineKeyboardButton('Изменить ответственного')
     item5 = types.InlineKeyboardButton('Удалить ответственного')
-    item6 = types.InlineKeyboardButton('Напомнить про спортзал')
+    item6 = types.InlineKeyboardButton('Добавить отдел')
+    item7 = types.InlineKeyboardButton('Напомнить про спортзал')
     markup.add(item1)
     markup.add(item2)
     markup.add(item3)
     markup.add(item4)
     markup.add(item5)
     markup.add(item6)
+    markup.add(item7)
     bot2.send_message(message.chat.id, 'Теперь у вас есть панель с опциями', reply_markup=markup)
 
 
